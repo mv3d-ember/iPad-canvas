@@ -691,7 +691,11 @@ function callViewer(id) {
   const pc = call.peerConnection;
   tunePc(pc);
   if (pc) pc.addEventListener('connectionstatechange', () => {
-    if (pc.connectionState === 'connected') tunePc(pc);
+    if (pc.connectionState === 'connected') {
+      tunePc(pc);
+      // push fresh full frames so a new viewer sees the drawing straight away
+      if (host.src === 'canvas') [0, 400, 1200, 2500].forEach(ms => setTimeout(board.redraw, ms));
+    }
     if (pc.connectionState === 'failed') {
       const conn = host.conns.get(id);
       if (conn) { try { conn.close(); } catch (_) {} }
