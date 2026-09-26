@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0d12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Share your iPad screen, a live drawing canvas, or your camera to another device. Peer-to-peer WebRTC, no sign-up.">
+<title>iPad Canvas · live share</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='8' y='4' width='48' height='56' rx='8' fill='%237c5cff'/%3E%3Cpath d='M20 42c6-14 12-18 24-22' stroke='white' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#141821; --panel2:#1b2130; --line:#2a3246; --text:#e8ecf4; --muted:#8e97ab;
+    --accent:#7c5cff; --accent2:#22d3ee; --ok:#34d399; --warn:#fbbf24; --bad:#ff5c7a;
+    --r:16px; --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Inter,sans-serif}
+  body{overscroll-behavior:none}
+  button,input{font:inherit;color:inherit}
+  [hidden]{display:none!important}
+  .muted{color:var(--muted)}
+  .view{display:none}
+  .view.active{display:flex}
+
+  /* buttons */
+  .btn{appearance:none;border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:10px 16px;
+    min-height:44px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    font-weight:600;transition:transform .08s,background .15s,border-color .15s;user-select:none;-webkit-user-select:none}
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),#5b8cff);border-color:transparent;color:#fff}
+  .btn.ghost{background:transparent}
+  .btn.danger{border-color:#5a2433;background:#2a1219;color:#ffc2cf}
+  .btn.big{min-height:56px;font-size:18px;padding:12px 22px;border-radius:14px}
+  .btn svg{width:20px;height:20px;flex:none}
+
+  /* landing */
+  #landing{min-height:100%;justify-content:center;padding:calc(24px + var(--safe-t)) 20px calc(24px + var(--safe-b))}
+  .wrap{width:100%;max-width:860px}
+  .brand{display:flex;gap:16px;align-items:center;margin:12px 0 22px}
+  .logo{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;flex:none;box-shadow:0 10px 30px #7c5cff44}
+  .logo svg{width:32px;height:32px}
+  h1{margin:0;font-size:30px;letter-spacing:-.02em}
+  h2{margin:0 0 6px;font-size:20px}
+  .brand p{margin:4px 0 0}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:680px){.cards{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:10px}
+  .card p{margin:0 0 6px}
+  .card .btn{margin-top:auto}
+  .join{display:flex;gap:10px;margin-top:auto}
+  .join input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:0 16px;min-height:56px;
+    font-size:24px;font-weight:700;letter-spacing:.25em;text-transform:uppercase;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .join input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .note{border-radius:14px;padding:14px 16px;margin:0 0 16px;border:1px solid var(--line);background:var(--panel)}
+  .note.ok{border-color:#1f5b47;background:#0f2a22}
+  .note.warn{border-color:#5d4a17;background:#2a220d}
+  .note.bad{border-color:#5a2433;background:#2a1219}
+  .note > b:first-child{display:block;margin-bottom:2px}
+  details.help{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px}
+  details.help summary{cursor:pointer;font-weight:600;min-height:28px}
+  details.help li{margin:6px 0}
+  footer{margin-top:18px;font-size:13px;text-align:center}
+  footer a{color:var(--muted)}
+
+  /* shared chrome */
+  .topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:calc(8px + var(--safe-t)) 12px 8px;
+    background:rgba(11,13,18,.92);border-bottom:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:5}
+  .spacer{flex:1}
+  .status{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);white-space:nowrap}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+  .dot.ok{background:var(--ok);box-shadow:0 0 0 4px #34d39922}
+  .dot.wait{background:var(--warn);animation:pulse 1.2s infinite}
+  .dot.bad{background:var(--bad)}
+  @keyframes pulse{50%{opacity:.35}}
+  .pill{appearance:none;border:1px solid var(--line);background:var(--panel2);border-radius:999px;min-height:44px;padding:6px 16px;
+    display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600}
+  .pill b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;font-size:18px;color:#fff}
+  .pill small{color:var(--muted);font-weight:500}
+  .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
+  .seg button{appearance:none;border:0;background:transparent;border-radius:9px;min-height:38px;padding:4px 14px;font-weight:600;color:var(--muted);cursor:pointer}
+  .seg button.on{background:var(--panel2);color:#fff;box-shadow:inset 0 0 0 1px var(--line)}
+  .seg button:disabled{opacity:.35;cursor:not-allowed}
+
+  /* host */
+  #host,#viewer{position:fixed;inset:0;flex-direction:column}
+  .stage{position:relative;flex:1;min-height:0;background:#05060a;overflow:hidden}
+  #board{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;cursor:crosshair}
+  #preview{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+  #preview.mirror{transform:scaleX(-1)}
+  .stagebadge{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.6);border:1px solid var(--line);border-radius:10px;padding:6px 10px;font-size:13px;pointer-events:none}
+  .picker{position:absolute;inset:0;background:rgba(5,6,10,.9);display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto;z-index:4}
+  .picker-inner{width:100%;max-width:760px}
+  .picker h2{font-size:24px;margin-bottom:12px}
+  .choices{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media (max-width:700px){.choices{grid-template-columns:1fr}}
+  .choice{appearance:none;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:18px;cursor:pointer;
+    display:flex;flex-direction:column;gap:6px;min-height:150px;transition:border-color .15s,transform .08s}
+  .choice:hover{border-color:var(--accent)}
+  .choice:active{transform:scale(.98)}
+  .choice svg{width:34px;height:34px;color:var(--accent2)}
+  .choice b{font-size:18px}
+  .choice span{color:var(--muted);font-size:14px}
+  .choice:disabled{opacity:.5;cursor:not-allowed;border-style:dashed}
+  .badge{display:inline-block;margin-top:auto;font-style:normal;font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;background:#2a1219;color:#ffc2cf;align-self:flex-start}
+  .badge.ok{background:#0f2a22;color:#a7f3d0}
+
+  .tools{display:flex;align-items:center;gap:10px;padding:8px 12px calc(8px + var(--safe-b));background:rgba(11,13,18,.95);
+    border-top:1px solid var(--line);overflow-x:auto;scrollbar-width:none;z-index:5}
+  .tools::-webkit-scrollbar{display:none}
+  .tgroup{display:flex;align-items:center;gap:6px;flex:none;padding-right:10px;border-right:1px solid var(--line)}
+  .tgroup:last-child{border-right:0}
+  .tbtn{appearance:none;border:1px solid transparent;background:transparent;border-radius:12px;min-width:44px;min-height:44px;padding:0 10px;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:var(--text);font-weight:600;font-size:14px;flex:none}
+  .tbtn svg{width:22px;height:22px}
+  .tbtn.on,.tbtn[aria-pressed="true"]{background:var(--panel2);border-color:var(--accent)}
+  .sw{width:34px;height:34px;border-radius:50%;border:2px solid #ffffff22;cursor:pointer;flex:none;padding:0}
+  .sw.on{outline:3px solid #fff;outline-offset:2px}
+  .custom{position:relative;width:34px;height:34px;border-radius:50%;overflow:hidden;flex:none;
+    background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);border:2px solid #ffffff22}
+  .custom input{position:absolute;inset:-8px;opacity:0;width:60px;height:60px;cursor:pointer}
+  input[type=range]{width:140px;accent-color:var(--accent);height:44px}
+  .sizedot{width:40px;height:40px;display:grid;place-items:center;flex:none}
+  .sizedot i{display:block;border-radius:50%;background:#fff}
+
+  /* viewer */
+  #viewer{background:#000}
+  .vstage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+  #remote{width:100%;height:100%;object-fit:contain;background:#000}
+  #viewer .topbar{position:absolute;left:0;right:0;top:0;transition:opacity .25s,transform .25s}
+  #viewer.idle .topbar{opacity:0;transform:translateY(-100%);pointer-events:none}
+  .vmsg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;background:#000c}
+  .vmsg p{max-width:520px;margin:0;font-size:18px}
+  .vmsg .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .spinner{width:42px;height:42px;border-radius:50%;border:4px solid #ffffff22;border-top-color:var(--accent);animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #viewer:fullscreen{background:#000}
+
+  /* modal + toast */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;width:100%;max-width:420px;display:flex;flex-direction:column;gap:14px;align-items:stretch;text-align:center}
+  .bigcode{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:44px;font-weight:800;letter-spacing:.22em;color:#fff;padding-left:.22em}
+  .qr{align-self:center;background:#fff;padding:12px;border-radius:14px;line-height:0;min-width:10px;min-height:10px}
+  .qr img,.qr canvas{display:block;width:200px;height:200px}
+  .linkrow{display:flex;gap:8px}
+  .linkrow input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:0 12px;min-height:44px;font-size:14px;color:var(--muted)}
+  .toast{position:fixed;left:50%;bottom:calc(84px + var(--safe-b));transform:translateX(-50%) translateY(20px);background:#fff;color:#111;padding:10px 16px;border-radius:12px;
+    font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:30;max-width:90vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============ LANDING ============ -->
+<main id="landing" class="view active">
+  <div class="wrap">
+    <header class="brand">
+      <div class="logo"><svg viewBox="0 0 32 32" fill="none"><rect x="5" y="2" width="22" height="28" rx="4" stroke="#fff" stroke-width="2.4"/><path d="M10 20c3-6 6-8 12-10" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg></div>
+      <div>
+        <h1>iPad Canvas</h1>
+        <p class="muted">Share your iPad live to another screen. Peer-to-peer, no sign-up, nothing to install.</p>
+      </div>
+    </header>
+
+    <div id="capNote" class="note"></div>
+
+    <div class="cards">
+      <section class="card">
+        <h2>Share from this device</h2>
+        <p class="muted">You get a short room code, a link and a QR code. Open the site on the other device to watch.</p>
+        <button id="btnShare" class="btn primary big">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>
+          Share
+        </button>
+      </section>
+      <section class="card">
+        <h2>Watch a stream</h2>
+        <p class="muted">Type the code shown on the sharing device, or just scan its QR code.</p>
+        <form id="joinForm" class="join" autocomplete="off">
+          <input id="joinCode" maxlength="6" placeholder="CODE" aria-label="Room code" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
+          <button class="btn primary big" type="submit">Watch</button>
+        </form>
+      </section>
+    </div>
+
+    <details class="help">
+      <summary>How it works &amp; limits</summary>
+      <ul class="muted">
+        <li>Video goes straight between the two devices with WebRTC. The free PeerJS cloud server is only used to introduce them to each other.</li>
+        <li><b>iPad and iPhone:</b> Safari (and every other iPad browser, since they all run on Safari's engine) doesn't let websites capture the whole screen. On iPad you can share the <b>live drawing canvas</b> or the <b>camera</b> instead.</li>
+        <li>If you need to mirror the whole iPad screen, use the iPad's own <b>Screen Mirroring</b> (AirPlay to a Mac, Apple TV or smart TV) or share your screen in a FaceTime call.</li>
+        <li>On a computer (Chrome, Edge, Firefox, Safari on Mac) full screen sharing works.</li>
+        <li>Keep Safari open while you share. If you switch apps, iPadOS pauses the page and the stream freezes.</li>
+        <li>Works best with both devices on the same Wi-Fi. Some school or work networks block peer-to-peer video.</li>
+      </ul>
+    </details>
+    <footer class="muted">Open source · <a href="https://github.com/mv3d-ember/iPad-canvas" target="_blank" rel="noopener">github.com/mv3d-ember/iPad-canvas</a></footer>
+  </div>
+</main>
+
+<!-- ============ HOST ============ -->
+<section id="host" class="view" aria-label="Sharing">
+  <div class="topbar">
+    <button id="hostStop" class="btn danger" title="Stop sharing">
+      <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Stop
+    </button>
+    <div class="seg" id="srcSeg" role="tablist" aria-label="Source">
+      <button data-src="screen">Screen</button>
+      <button data-src="canvas">Canvas</button>
+      <button data-src="camera">Camera</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="status"><span class="dot wait" id="hostDot"></span><span id="hostStatus">Connecting…</span></div>
+    <button id="roomPill" class="pill" title="Show code, link and QR"><small>Code</small><b id="roomCode">······</b>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v7h-6"/></svg>
+    </button>
+  </div>
+
+  <div class="stage" id="hostStage">
+    <canvas id="board" hidden></canvas>
+    <video id="preview" muted playsinline autoplay hidden></video>
+    <div id="stageBadge" class="stagebadge" hidden></div>
+
+    <div id="picker" class="picker">
+      <div class="picker-inner">
+        <h2>What do you want to share?</h2>
+        <div id="pickNote" class="note" hidden></div>
+        <div class="choices">
+          <button class="choice" data-src="screen" id="chScreen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <b>Full screen</b><span>Share your whole screen, a window or a tab.</span>
+            <em class="badge" id="screenBadge"></em>
+          </button>
+          <button class="choice" data-src="canvas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            <b>Drawing canvas</b><span>Draw live with Apple Pencil or your finger. Everything shows up on the other screen.</span>
+            <em class="badge ok">Works on iPad</em>
+          </button>
+          <button class="choice" data-src="camera" id="chCamera">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <b>Camera</b><span>Show what the front or back camera sees.</span>
+            <em class="badge ok" id="camBadge">Works on iPad</em>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- canvas tools -->
+  <div id="tools" class="tools" hidden>
+    <div class="tgroup">
+      <button class="tbtn on" data-tool="pen" title="Pen" aria-label="Pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+      <button class="tbtn" data-tool="eraser" title="Eraser" aria-label="Eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H9L4 15a2 2 0 0 1 0-3L13 3a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-9 9"/><path d="M7 11l7 7"/></svg></button>
+    </div>
+    <div class="tgroup" id="swatches"></div>
+    <div class="tgroup">
+      <label class="custom" title="Custom colour"><input type="color" id="customColor" value="#7c5cff" aria-label="Custom colour"></label>
+    </div>
+    <div class="tgroup">
+      <input type="range" id="size" min="1" max="40" value="6" aria-label="Brush size">
+      <span class="sizedot"><i id="sizeDot"></i></span>
+    </div>
+    <div class="tgroup">
+      <button class="tbtn" id="undo" title="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>Undo</button>
+      <button class="tbtn" id="redo" title="Redo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>Redo</button>
+      <button class="tbtn" id="clear" title="Clear canvas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Clear</button>
+    </div>
+    <div class="tgroup">
+      <button class="tbtn" id="paper" title="Switch paper colour">Paper: Light</button>
+      <button class="tbtn" id="pencilOnly" aria-pressed="false" title="Ignore finger touches while drawing (palm rejection)">Pencil only</button>
+      <button class="tbtn" id="savePng" title="Save drawing as PNG">Save</button>
+    </div>
+  </div>
+
+  <!-- camera tools -->
+  <div id="camTools" class="tools" hidden>
+    <button class="btn" id="flipCam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-3l-2-3H9L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M9 13a3 3 0 0 1 5-2.2M15 13a3 3 0 0 1-5 2.2"/></svg>Flip camera</button>
+  </div>
+</section>
+
+<!-- ============ VIEWER ============ -->
+<section id="viewer" class="view" aria-label="Watching">
+  <div class="vstage">
+    <video id="remote" playsinline autoplay muted></video>
+  </div>
+  <div id="vmsg" class="vmsg">
+    <div class="spinner" id="vSpin"></div>
+    <p id="vText">Connecting…</p>
+    <div class="row" id="vActions" hidden>
+      <button class="btn primary" id="vRetry">Try again</button>
+      <button class="btn" id="vOther">Enter another code</button>
+    </div>
+    <button class="btn primary big" id="vTapPlay" hidden>Tap to start video</button>
+  </div>
+  <div class="topbar">
+    <button id="vLeave" class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Leave</button>
+    <div class="status"><span class="dot wait" id="vDot"></span><span id="vStatus">Connecting</span></div>
+    <div class="spacer"></div>
+    <button id="vFull" class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>Fullscreen</button>
+  </div>
+</section>
+
+<!-- ============ SHARE MODAL ============ -->
+<div id="shareModal" class="modal" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h2 id="mTitle">Watch on another device</h2>
+    <p class="muted" style="margin:0">Scan the QR code, open the link, or type this code into the site on the other device.</p>
+    <div class="bigcode" id="mCode">······</div>
+    <div class="qr" id="qr"></div>
+    <div class="linkrow"><input id="mLink" readonly aria-label="Viewer link"><button class="btn" id="mCopy">Copy</button></div>
+    <button class="btn" id="mNative" hidden>Share link…</button>
+    <button class="btn primary" id="mClose">Done</button>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const PREFIX = 'ipadcanvas-mv3d-';                    // namespace on the public PeerJS server
+const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';      // no 0/O/1/I to avoid typos
+const CODE_LEN = 6;
+const PEER_URLS = [
+  'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js',
+  'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js'
+];
+const QR_URLS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+  'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js'
+];
+
+const md = navigator.mediaDevices;
+const caps = {
+  secure: window.isSecureContext !== false,
+  webrtc: typeof window.RTCPeerConnection === 'function',
+  screen: !!(md && typeof md.getDisplayMedia === 'function'),
+  camera: !!(md && typeof md.getUserMedia === 'function'),
+  canvas: typeof HTMLCanvasElement !== 'undefined' && typeof HTMLCanvasElement.prototype.captureStream === 'function',
+  ipad: /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1),
+  iphone: /iPhone|iPod/.test(navigator.userAgent)
+};
+
+function makeCode() {
+  const a = new Uint32Array(CODE_LEN);
+  crypto.getRandomValues(a);
+  return Array.from(a, n => ALPH[n % ALPH.length]).join('');
+}
+const normCode = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
+const peerIdFor = code => PREFIX + code.toLowerCase();
+
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.async = true; s.crossOrigin = 'anonymous';
+    s.onload = res; s.onerror = () => { s.remove(); rej(new Error('Failed to load ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+const libPromises = {};
+function need(globalName, urls) {
+  if (window[globalName]) return Promise.resolve();
+  if (!libPromises[globalName]) {
+    libPromises[globalName] = (async () => {
+      for (const u of urls) {
+        try { await loadScript(u); if (window[globalName]) return; } catch (e) { /* try next */ }
+      }
+      delete libPromises[globalName];
+      throw new Error(globalName + ' could not be loaded. Check your internet connection.');
+    })();
+  }
+  return libPromises[globalName];
+}
+
+let toastTimer;
+function toast(msg, ms = 2600) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function showView(id) {
+  $$('.view').forEach(v => v.classList.toggle('active', v.id === id));
+}
+
+function setDot(el, state) { el.className = 'dot ' + (state || ''); }
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) {
+    const i = $('#mLink'); i.focus(); i.select(); i.setSelectionRange(0, 9999);
+    try { return document.execCommand('copy'); } catch (e2) { return false; }
+  }
+}
+
+/* ---------- landing: capability note ---------- */
+function renderCaps() {
+  const el = $('#capNote');
+  if (!caps.secure) {
+    el.className = 'note bad';
+    el.innerHTML = '<b>This page must be opened over HTTPS.</b>Browsers block screen and camera access on insecure pages. Use the GitHub Pages link.';
+    return;
+  }
+  if (!caps.webrtc) {
+    el.className = 'note bad';
+    el.innerHTML = '<b>This browser doesn’t support WebRTC.</b>Please update it or try Safari, Chrome, Edge or Firefox.';
+    return;
+  }
+  if (caps.screen) {
+    el.className = 'note ok';
+    el.innerHTML = '<b>Full screen sharing is supported in this browser.</b>You can also share a live drawing canvas or your camera.';
+  } else {
+    el.className = 'note warn';
+    const who = caps.ipad ? 'iPad Safari (and every iPad browser)' : caps.iphone ? 'iPhone Safari (and every iPhone browser)' : 'This browser';
+    el.innerHTML = '<b>Full screen sharing isn’t available here.</b>' + who +
+      ' doesn’t let websites capture the whole screen. You can still share a <b>live drawing canvas</b> (Apple Pencil or touch) or your <b>camera</b>.' +
+      (caps.ipad ? ' To mirror the whole iPad screen, use Screen Mirroring (AirPlay) or FaceTime screen sharing.' : '') +
+      ' Watching works fine here.';
+  }
+}
+
+/* =====================================================================
+   DRAWING BOARD
+   ===================================================================== */
+const board = (() => {
+  const cv = $('#board');
+  const ctx = cv.getContext('2d');
+  const PAPER = { light: '#f7f7f4', dark: '#0e1117' };
+  const INK = { light: '#111827', dark: '#f8fafc' };
+  const SWATCHES = ['#111827', '#f8fafc', '#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
+  const st = { color: INK.light, size: 6, tool: 'pen', paper: 'light', pencilOnly: false };
+  let strokes = [], redoStack = [], cur = null, activeId = null;
+  let W = 0, H = 0, scale = 1, keepAlive = null, track = null;
+
+  const bg = () => PAPER[st.paper];
+
+  function fit() {
+    const r = cv.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let w = r.width * dpr, h = r.height * dpr;
+    const k = Math.min(1, 1920 / Math.max(w, h));      // cap stream resolution
+    w = Math.round(w * k); h = Math.round(h * k);
+    scale = w / r.width;
+    if (w === W && h === H) return;
+    W = cv.width = w; H = cv.height = h;
+    redraw();
+  }
+
+  function seg(s, a, b) {
+    ctx.strokeStyle = s.erase ? bg() : s.color;
+    ctx.lineWidth = Math.max(0.5, s.size * ((a.p + b.p) / 2) * scale);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(a.x * scale, a.y * scale);
+    ctx.lineTo(b.x * scale, b.y * scale);
+    ctx.stroke();
+  }
+  function dot(s, p) {
+    ctx.fillStyle = s.erase ? bg() : s.color;
+    ctx.beginPath();
+    ctx.arc(p.x * scale, p.y * scale, Math.max(0.5, s.size * p.p * scale / 2), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  function drawStroke(s) {
+    const p = s.pts;
+    if (!p.length) return;
+    dot(s, p[0]);
+    for (let i = 1; i < p.length; i++) seg(s, p[i - 1], p[i]);
+  }
+  function redraw() {
+    ctx.fillStyle = bg();
+    ctx.fillRect(0, 0, W, H);
+    strokes.forEach(drawStroke);
+  }
+
+  function pressure(e) {
+    if (e.pointerType === 'pen') return 0.3 + Math.min(1, e.pressure || 0.5) * 1.4;
+    return 1;
+  }
+  function addPoint(e) {
+    const r = cv.getBoundingClientRect();
+    const p = { x: e.clientX - r.left, y: e.clientY - r.top, p: pressure(e) };
+    const pts = cur.pts;
+    const last = pts[pts.length - 1];
+    if (last && Math.abs(last.x - p.x) < 0.3 && Math.abs(last.y - p.y) < 0.3) return;
+    pts.push(p);
+    if (pts.length === 1) dot(cur, p); else seg(cur, last, p);
+  }
+
+  cv.addEventListener('pointerdown', e => {
+    if (st.pencilOnly && e.pointerType === 'touch') return;
+    if (activeId !== null) return;
+    e.preventDefault();
+    activeId = e.pointerId;
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    const erase = st.tool === 'eraser';
+    cur = { color: st.color, size: erase ? st.size * 3 + 10 : st.size, erase, pts: [] };
+    strokes.push(cur); redoStack = [];
+    addPoint(e);
+  });
+  cv.addEventListener('pointermove', e => {
+    if (e.pointerId !== activeId || !cur) return;
+    e.preventDefault();
+    const list = e.getCoalescedEvents ? e.getCoalescedEvents() : null;
+    (list && list.length ? list : [e]).forEach(addPoint);
+  });
+  const end = e => {
+    if (e.pointerId !== activeId) return;
+    activeId = null; cur = null;
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+  cv.addEventListener('lostpointercapture', end);
+  // stop iPad scroll / zoom / callout gestures on the canvas
+  ['touchstart', 'touchmove', 'gesturestart'].forEach(t => cv.addEventListener(t, e => e.preventDefault(), { passive: false }));
+
+  /* toolbar */
+  const swWrap = $('#swatches');
+  SWATCHES.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'sw'; b.style.background = c; b.dataset.color = c; b.title = c; b.setAttribute('aria-label', 'Colour ' + c);
+    b.onclick = () => setColor(c);
+    swWrap.appendChild(b);
+  });
+  function setColor(c) {
+    st.color = c; setTool('pen');
+    $$('.sw').forEach(s => s.classList.toggle('on', s.dataset.color === c));
+    updateSizeDot();
+  }
+  function setTool(t) {
+    st.tool = t;
+    $$('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  }
+  function updateSizeDot() {
+    const d = $('#sizeDot'); const px = Math.max(8, Math.min(36, st.size));
+    d.style.width = d.style.height = px + 'px';
+    d.style.background = st.tool === 'eraser' ? 'transparent' : st.color;
+    d.style.boxShadow = '0 0 0 2px #ffffff66';
+  }
+  $$('[data-tool]').forEach(b => b.onclick = () => { setTool(b.dataset.tool); updateSizeDot(); });
+  $('#customColor').addEventListener('input', e => setColor(e.target.value));
+  $('#size').addEventListener('input', e => { st.size = +e.target.value; updateSizeDot(); });
+  $('#undo').onclick = () => { if (strokes.length) { redoStack.push(strokes.pop()); redraw(); } };
+  $('#redo').onclick = () => { if (redoStack.length) { strokes.push(redoStack.pop()); redraw(); } };
+  $('#clear').onclick = () => {
+    if (!strokes.length) return;
+    if (confirm('Clear the whole canvas?')) { strokes = []; redoStack = []; redraw(); }
+  };
+  $('#paper').onclick = () => {
+    const was = st.paper;
+    st.paper = was === 'light' ? 'dark' : 'light';
+    if (st.color === INK[was]) setColor(INK[st.paper]);
+    $('#paper').textContent = 'Paper: ' + (st.paper === 'light' ? 'Light' : 'Dark');
+    redraw();
+  };
+  $('#pencilOnly').onclick = e => {
+    st.pencilOnly = !st.pencilOnly;
+    e.currentTarget.setAttribute('aria-pressed', String(st.pencilOnly));
+    toast(st.pencilOnly ? 'Pencil only: finger touches are ignored' : 'Finger drawing enabled');
+  };
+  $('#savePng').onclick = () => {
+    cv.toBlob(b => {
+      if (!b) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = 'ipad-canvas-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, 'image/png');
+  };
+  setColor(st.color); updateSizeDot();
+
+  /* stream: captureStream only sends frames when the canvas changes,
+     so repaint one background pixel a few times a second to keep video flowing */
+  function stream() {
+    fit();
+    const s = cv.captureStream(30);
+    track = s.getVideoTracks()[0];
+    clearInterval(keepAlive);
+    keepAlive = setInterval(() => {
+      if (!track || track.readyState === 'ended') { clearInterval(keepAlive); return; }
+      ctx.fillStyle = bg(); ctx.fillRect(0, 0, 1, 1);
+      if (typeof track.requestFrame === 'function') { try { track.requestFrame(); } catch (_) {} }
+    }, 200);
+    return s;
+  }
+
+  return { cv, fit, stream, redraw, get strokes() { return strokes; }, state: st };
+})();
+
+/* =====================================================================
+   HOST (sharing device)
+   ===================================================================== */
+const host = { peer: null, code: null, stream: null, src: null, facing: 'user', conns: new Map(), calls: new Map(), wake: null, starting: null };
+
+function setHostStatus() {
+  const n = Array.from(host.conns.values()).filter(c => c.open).length;
+  const dot = $('#hostDot'), txt = $('#hostStatus');
+  if (!host.peer || !host.code) { setDot(dot, 'wait'); txt.textContent = 'Getting a code…'; return; }
+  if (host.peer.disconnected) { setDot(dot, 'wait'); txt.textContent = n ? `Live · ${n} watching · reconnecting` : 'Reconnecting…'; return; }
+  if (!host.stream) { setDot(dot, 'wait'); txt.textContent = 'Pick something to share'; return; }
+  setDot(dot, 'ok');
+  txt.textContent = n ? `Live · ${n} watching` : 'Live · waiting for viewer';
+}
+
+function startHostPeer() {
+  if (host.starting) return host.starting;
+  host.starting = (async () => {
+    await need('Peer', PEER_URLS);
+    await new Promise((resolve, reject) => {
+      const attempt = n => {
+        const code = makeCode();
+        const peer = new window.Peer(peerIdFor(code), { debug: 1 });
+        host.peer = peer;
+        peer.on('open', () => {
+          if (host.peer !== peer) return;
+          host.code = code;
+          $('#roomCode').textContent = code;
+          setHostStatus();
+          resolve();
+        });
+        peer.on('connection', onViewerConn);
+        peer.on('call', c => { try { c.close(); } catch (_) {} });
+        peer.on('disconnected', () => {
+          if (host.peer !== peer) return;
+          setHostStatus();
+          setTimeout(() => { if (host.peer === peer && !peer.destroyed && peer.disconnected) peer.reconnect(); }, 1500);
+        });
+        peer.on('error', err => {
+          if (host.peer !== peer) return;
+          console.warn('[host] peer error', err.type, err);
+          if (err.type === 'unavailable-id' && n < 5) { peer.destroy(); attempt(n + 1); return; }
+          if (!host.code) { reject(err); return; }
+          if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+            toast('Lost the connection to the signalling server, retrying…');
+            setHostStatus();
+          }
+        });
+      };
+      attempt(0);
+    });
+  })();
+  host.starting.catch(err => {
+    host.starting = null;
+    setDot($('#hostDot'), 'bad');
+    $('#hostStatus').textContent = 'Could not get a code';
+    toast((err && err.message) || 'Could not reach the PeerJS server', 5000);
+  });
+  return host.starting;
+}
+
+function onViewerConn(conn) {
+  conn.on('open', () => {
+    host.conns.set(conn.peer, conn);
+    setHostStatus();
+    toast('A viewer connected');
+    try { conn.send({ type: 'hello', src: host.src }); } catch (_) {}
+    if (host.stream) callViewer(conn.peer);
+  });
+  conn.on('data', d => {
+    if (d && d.type === 'ready' && host.stream && !host.calls.has(conn.peer)) callViewer(conn.peer);
+  });
+  const bye = () => {
+    if (host.conns.get(conn.peer) !== conn) return;
+    host.conns.delete(conn.peer);
+    const c = host.calls.get(conn.peer);
+    if (c) { try { c.close(); } catch (_) {} host.calls.delete(conn.peer); }
+    setHostStatus();
+  };
+  conn.on('close', bye);
+  conn.on('error', bye);
+}
+
+function callViewer(id) {
+  if (!host.peer || !host.stream) return;
+  const old = host.calls.get(id);
+  if (old) { try { old.close(); } catch (_) {} }
+  const call = host.peer.call(id, host.stream, { metadata: { src: host.src } });
+  if (!call) return;
+  host.calls.set(id, call);
+  call.on('close', () => { if (host.calls.get(id) === call) host.calls.delete(id); });
+  call.on('error', e => console.warn('[host] call error', e));
+  const pc = call.peerConnection;
+  tunePc(pc);
+  if (pc) pc.addEventListener('connectionstatechange', () => {
+    if (pc.connectionState === 'connected') tunePc(pc);
+    if (pc.connectionState === 'failed') {
+      const conn = host.conns.get(id);
+      if (conn) { try { conn.close(); } catch (_) {} }
+    }
+  });
+}
+
+/* keep drawings/screens sharp: prefer resolution over frame rate, allow a higher bitrate */
+async function tunePc(pc) {
+  if (!pc || !pc.getSenders) return;
+  for (const sender of pc.getSenders()) {
+    if (!sender.track || sender.track.kind !== 'video' || !sender.getParameters) continue;
+    const apply = async withPref => {
+      const p = sender.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = 4000000;
+      if (withPref) p.degradationPreference = host.src === 'camera' ? 'balanced' : 'maintain-resolution';
+      await sender.setParameters(p);
+    };
+    try { await apply(true); } catch (e) { try { await apply(false); } catch (_) {} }
+  }
+}
+
+async function setHostStream(stream, src) {
+  const old = host.stream;
+  host.stream = stream; host.src = src;
+  const track = stream.getVideoTracks()[0];
+  if (track && 'contentHint' in track) track.contentHint = src === 'camera' ? 'motion' : 'detail';
+  for (const [id, call] of Array.from(host.calls)) {
+    let swapped = false;
+    try {
+      const pc = call.peerConnection;
+      const sender = pc && pc.getSenders().find(s => (s.track && s.track.kind === 'video') || s.track === null);
+      if (sender && pc.connectionState !== 'failed') { await sender.replaceTrack(track); swapped = true; tunePc(pc); }
+    } catch (e) { console.warn('replaceTrack failed, re-calling', e); }
+    if (!swapped) callViewer(id);
+  }
+  for (const id of host.conns.keys()) if (!host.calls.has(id)) callViewer(id);
+  for (const c of host.conns.values()) { try { c.send({ type: 'src', src }); } catch (_) {} }
+  if (old && old !== stream) old.getTracks().forEach(t => t.stop());
+  setHostStatus();
+}
+
+function showStage(src, stream) {
+  const pv = $('#preview');
+  const isCanvas = src === 'canvas';
+  $('#board').hidden = !isCanvas;
+  $('#tools').hidden = !isCanvas;
+  $('#camTools').hidden = src !== 'camera';
+  pv.hidden = isCanvas;
+  pv.classList.toggle('mirror', src === 'camera' && host.facing === 'user');
+  if (!isCanvas) { pv.srcObject = stream; pv.play().catch(() => {}); } else { pv.srcObject = null; }
+  const badge = $('#stageBadge');
+  badge.hidden = src !== 'screen';
+  badge.textContent = 'You are sharing your screen · this is a preview';
+  if (isCanvas) requestAnimationFrame(board.fit);
+}
+
+function syncSeg() {
+  $$('#srcSeg button').forEach(b => {
+    b.classList.toggle('on', b.dataset.src === host.src);
+    if (b.dataset.src === 'screen') b.disabled = !caps.screen;
+    if (b.dataset.src === 'camera') b.disabled = !caps.camera;
+    if (b.dataset.src === 'canvas') b.disabled = !caps.canvas;
+  });
+}
+
+function openPicker(msg) {
+  const note = $('#pickNote');
+  if (msg) { note.hidden = false; note.className = 'note warn'; note.innerHTML = msg; }
+  else if (!caps.screen) {
+    note.hidden = false; note.className = 'note warn';
+    note.innerHTML = '<b>Full screen sharing isn’t supported in this browser.</b>' +
+      (caps.ipad ? 'Apple doesn’t let websites capture the iPad screen. ' : '') +
+      'Share the live drawing canvas or your camera instead.';
+  } else note.hidden = true;
+  $('#picker').hidden = false;
+}
+function closePicker() { $('#picker').hidden = true; }
+
+async function useSource(src) {
+  try {
+    let stream;
+    if (src === 'screen') {
+      if (!caps.screen) throw Object.assign(new Error('Screen capture isn’t supported in this browser.'), { name: 'NotSupportedError' });
+      stream = await md.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false });
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        if (host.stream !== stream) return;
+        host.stream = null; host.src = null;
+        syncSeg(); setHostStatus();
+        $('#preview').srcObject = null;
+        openPicker('<b>Screen sharing stopped.</b>Pick something else to keep sharing, or tap Stop.');
+      });
+    } else if (src === 'camera') {
+      if (!caps.camera) throw Object.assign(new Error('Camera access isn’t available in this browser.'), { name: 'NotSupportedError' });
+      stream = await md.getUserMedia({ video: { facingMode: host.facing, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    } else {
+      if (!caps.canvas) throw Object.assign(new Error('Canvas streaming isn’t supported in this browser.'), { name: 'NotSupportedError' });
+      $('#board').hidden = false;
+      stream = board.stream();
+    }
+    showStage(src, stream);
+    closePicker();
+    await setHostStream(stream, src);
+    syncSeg();
+    requestWake();
+    startHostPeer();
+  } catch (err) {
+    console.warn('[host] source error', err);
+    let msg = (err && err.message) || String(err);
+    if (err && err.name === 'NotAllowedError') msg = src === 'screen' ? 'Screen sharing was cancelled or blocked.' : 'Camera permission was denied. Allow it in Settings › Safari › Camera.';
+    if (err && err.name === 'NotFoundError') msg = 'No camera was found.';
+    toast(msg, 4000);
+    if (!host.stream) openPicker('<b>' + msg + '</b>' + (src !== 'canvas' ? 'Try the drawing canvas instead.' : ''));
+  }
+}
+
+async function requestWake() {
+  try {
+    if ('wakeLock' in navigator && !host.wake) {
+      host.wake = await navigator.wakeLock.request('screen');
+      host.wake.addEventListener('release', () => { host.wake = null; });
+    }
+  } catch (_) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && host.stream) requestWake();
+});
+
+function stopHosting() {
+  for (const c of host.conns.values()) { try { c.send({ type: 'bye' }); } catch (_) {} }
+  const peer = host.peer;
+  setTimeout(() => { try { peer && peer.destroy(); } catch (_) {} }, 250);
+  for (const c of host.calls.values()) { try { c.close(); } catch (_) {} }
+  if (host.stream) host.stream.getTracks().forEach(t => t.stop());
+  if (host.wake) { host.wake.release().catch(() => {}); host.wake = null; }
+  Object.assign(host, { peer: null, code: null, stream: null, src: null, starting: null });
+  host.conns.clear(); host.calls.clear();
+  $('#preview').srcObject = null;
+  $('#roomCode').textContent = '······';
+  $('#shareModal').hidden = true;
+  showView('landing');
+}
+
+/* share modal */
+function viewerLink(code) {
+  const base = location.origin && location.origin !== 'null' ? location.origin + location.pathname : location.href.split('?')[0];
+  return base + '?room=' + code;
+}
+async function openShareModal() {
+  if (!host.code) { toast('Still getting a code…'); return; }
+  const link = viewerLink(host.code);
+  $('#mCode').textContent = host.code;
+  $('#mLink').value = link;
+  $('#mNative').hidden = typeof navigator.share !== 'function';
+  $('#shareModal').hidden = false;
+  const box = $('#qr');
+  box.innerHTML = '';
+  try {
+    await need('QRCode', QR_URLS);
+    new window.QRCode(box, { text: link, width: 200, height: 200, colorDark: '#000000', colorLight: '#ffffff', correctLevel: window.QRCode.CorrectLevel.M });
+    box.title = link;
+  } catch (e) { box.hidden = true; }
+}
+
+/* =====================================================================
+   VIEWER
+   ===================================================================== */
+const viewer = { peer: null, conn: null, call: null, code: null, timer: null, got: false, ended: false };
+
+function vMsg(text, state, opts = {}) {
+  const m = $('#vmsg');
+  if (text === null) { m.hidden = true; return; }
+  m.hidden = false;
+  $('#vText').textContent = text;
+  $('#vSpin').hidden = !opts.spin;
+  $('#vActions').hidden = !opts.actions;
+  $('#vTapPlay').hidden = !opts.tap;
+  if (state) setDot($('#vDot'), state);
+}
+function vStatus(text, state) { $('#vStatus').textContent = text; if (state) setDot($('#vDot'), state); }
+
+function cleanupViewer() {
+  clearTimeout(viewer.timer);
+  try { viewer.call && viewer.call.close(); } catch (_) {}
+  try { viewer.conn && viewer.conn.close(); } catch (_) {}
+  try { viewer.peer && viewer.peer.destroy(); } catch (_) {}
+  const v = $('#remote'); v.srcObject = null;
+  Object.assign(viewer, { peer: null, conn: null, call: null, got: false, ended: false });
+}
+
+function vEnded(text) {
+  if (viewer.ended) return;
+  viewer.ended = true;
+  clearTimeout(viewer.timer);
+  vMsg(text || 'The stream has ended.', 'bad', { actions: true });
+  vStatus('Ended', 'bad');
+  $('#viewer').classList.remove('idle');
+}
+
+async function startViewer(raw) {
+  const code = normCode(raw);
+  if (code.length !== CODE_LEN) { toast('Codes are ' + CODE_LEN + ' letters/numbers'); return; }
+  cleanupViewer();
+  viewer.code = code;
+  showView('viewer');
+  try { history.replaceState(null, '', '?room=' + code); } catch (_) {}
+  vStatus('Room ' + code, 'wait');
+  vMsg('Connecting…', 'wait', { spin: true });
+
+  try { await need('Peer', PEER_URLS); }
+  catch (e) { vEnded('Could not load the connection library. Check your internet connection.'); return; }
+  if (viewer.code !== code) return;
+
+  const peer = new window.Peer({ debug: 1 });
+  viewer.peer = peer;
+
+  peer.on('open', () => {
+    if (viewer.peer !== peer) return;
+    vMsg('Looking for room ' + code + '…', 'wait', { spin: true });
+    const conn = peer.connect(peerIdFor(code), { reliable: true });
+    viewer.conn = conn;
+    conn.on('open', () => {
+      vMsg('Connected. Waiting for video…', 'wait', { spin: true });
+      try { conn.send({ type: 'ready' }); } catch (_) {}
+    });
+    conn.on('data', d => {
+      if (!d) return;
+      if ((d.type === 'hello' || d.type === 'src')) {
+        if (!d.src) { if (!viewer.got) vMsg('Connected. The sharer hasn’t picked what to share yet…', 'wait', { spin: true }); }
+        else vStatus('Room ' + code + ' · ' + ({ screen: 'Screen', canvas: 'Canvas', camera: 'Camera' }[d.src] || d.src), viewer.got ? 'ok' : 'wait');
+      }
+      if (d.type === 'bye') vEnded('The sharer stopped sharing.');
+    });
+    conn.on('close', () => { if (viewer.peer === peer) vEnded('The sharer stopped sharing or the connection closed.'); });
+  });
+
+  peer.on('call', call => {
+    if (viewer.peer !== peer) return;
+    if (viewer.call && viewer.call !== call) { try { viewer.call.close(); } catch (_) {} }
+    viewer.call = call;
+    call.answer();
+    call.on('stream', s => attachRemote(s, code));
+    const pc = call.peerConnection;
+    if (pc) pc.addEventListener('iceconnectionstatechange', () => {
+      if (pc.iceConnectionState === 'failed') vEnded('Couldn’t make a direct connection between the devices. Try putting both on the same Wi-Fi network.');
+      if (pc.iceConnectionState === 'disconnected') vStatus('Room ' + code + ' · connection unstable', 'wait');
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') { if (viewer.got) setDot($('#vDot'), 'ok'); }
+    });
+  });
+
+  peer.on('error', err => {
+    if (viewer.peer !== peer) return;
+    console.warn('[viewer] peer error', err.type, err);
+    if (err.type === 'peer-unavailable') vEnded('No one is sharing with code ' + code + '. Check the code, and make sure the other device is still on the Share screen.');
+    else if (['network', 'server-error', 'socket-error', 'socket-closed', 'browser-incompatible', 'webrtc'].includes(err.type)) {
+      if (!viewer.got) vEnded('Connection problem (' + err.type + '). Check your internet and try again.');
+    }
+  });
+  peer.on('disconnected', () => {
+    setTimeout(() => { if (viewer.peer === peer && !peer.destroyed && peer.disconnected) peer.reconnect(); }, 1500);
+  });
+
+  viewer.timer = setTimeout(() => {
+    if (!viewer.got && !viewer.ended && viewer.code === code)
+      vMsg('Still waiting… If this takes a while, the networks may be blocking peer-to-peer video. Putting both devices on the same Wi-Fi usually helps.', 'wait', { spin: true, actions: true });
+  }, 15000);
+}
+
+function attachRemote(stream, code) {
+  const v = $('#remote');
+  if (v.srcObject !== stream) v.srcObject = stream;
+  viewer.got = true;
+  clearTimeout(viewer.timer);
+  vStatus('Room ' + code + ' · Live', 'ok');
+  if (v.videoWidth) vMsg(null);
+  else vMsg('Receiving video…', 'ok', { spin: true });
+  const p = v.play();
+  if (p && p.catch) p.catch(() => vMsg('Ready.', 'ok', { tap: true }));
+  armIdle();
+}
+
+// hide the overlay only once real frames arrive
+function onFrames() {
+  const v = $('#remote');
+  if (!viewer.got || !v.videoWidth) return;
+  $('#vStatus').title = v.videoWidth + '×' + v.videoHeight;
+  if (!v.paused && !viewer.ended) vMsg(null);
+}
+['resize', 'loadeddata', 'playing'].forEach(t => $('#remote').addEventListener(t, onFrames));
+
+/* fullscreen */
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+function toggleFullscreen() {
+  if (fsEl()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+  const el = $('#viewer'), v = $('#remote');
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req) {
+    try {
+      const r = req.call(el);
+      if (r && r.catch) r.catch(() => v.webkitEnterFullscreen && v.webkitEnterFullscreen());
+      return;
+    } catch (_) {}
+  }
+  if (v.webkitEnterFullscreen) v.webkitEnterFullscreen();   // iPhone Safari
+  else toast('Fullscreen isn’t available in this browser');
+}
+
+/* auto-hide viewer bar */
+let idleTimer;
+function armIdle() {
+  const vw = $('#viewer');
+  vw.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { if (viewer.got && !viewer.ended) vw.classList.add('idle'); }, 3500);
+}
+['pointerdown', 'pointermove', 'keydown'].forEach(t => $('#viewer').addEventListener(t, armIdle));
+$('#remote').addEventListener('dblclick', toggleFullscreen);
+
+/* =====================================================================
+   WIRING
+   ===================================================================== */
+renderCaps();
+if (!caps.screen) {
+  const b = $('#chScreen'); b.disabled = true;
+  $('#screenBadge').textContent = caps.ipad ? 'Not possible on iPad' : 'Not supported in this browser';
+} else { $('#screenBadge').textContent = 'Supported here'; $('#screenBadge').classList.add('ok'); }
+if (!caps.camera) { $('#chCamera').disabled = true; $('#camBadge').className = 'badge'; $('#camBadge').textContent = 'Not available'; }
+else if (!caps.ipad) $('#camBadge').textContent = 'Supported here';
+
+$('#btnShare').onclick = () => {
+  showView('host');
+  syncSeg(); setHostStatus(); openPicker();
+  startHostPeer();
+};
+$$('.choice').forEach(b => b.onclick = () => useSource(b.dataset.src));
+$$('#srcSeg button').forEach(b => b.onclick = () => { if (b.dataset.src !== host.src) useSource(b.dataset.src); });
+$('#hostStop').onclick = () => {
+  const n = Array.from(host.conns.values()).filter(c => c.open).length;
+  if (n && !confirm('Stop sharing? ' + n + ' viewer(s) will be disconnected.')) return;
+  stopHosting();
+};
+$('#flipCam').onclick = () => { host.facing = host.facing === 'user' ? 'environment' : 'user'; useSource('camera'); };
+$('#roomPill').onclick = openShareModal;
+$('#mClose').onclick = () => { $('#shareModal').hidden = true; };
+$('#shareModal').addEventListener('click', e => { if (e.target.id === 'shareModal') $('#shareModal').hidden = true; });
+$('#mCopy').onclick = async () => toast(await copyText($('#mLink').value) ? 'Link copied' : 'Copy failed. Select the link and copy it.');
+$('#mNative').onclick = () => navigator.share({ title: 'Watch my iPad Canvas', text: 'Room code ' + host.code, url: $('#mLink').value }).catch(() => {});
+
+$('#joinCode').addEventListener('input', e => { const v = normCode(e.target.value); if (e.target.value !== v) e.target.value = v; });
+$('#joinForm').addEventListener('submit', e => { e.preventDefault(); startViewer($('#joinCode').value); });
+$('#vLeave').onclick = () => { cleanupViewer(); viewer.code = null; try { history.replaceState(null, '', location.pathname); } catch (_) {} if (fsEl()) toggleFullscreen(); showView('landing'); };
+$('#vRetry').onclick = () => startViewer(viewer.code);
+$('#vOther').onclick = () => { $('#vLeave').click(); setTimeout(() => $('#joinCode').focus(), 50); };
+$('#vTapPlay').onclick = () => { $('#remote').play().then(() => vMsg(null)).catch(() => {}); };
+$('#vFull').onclick = toggleFullscreen;
+
+new ResizeObserver(() => { if (!$('#board').hidden) board.fit(); }).observe($('#hostStage'));
+window.addEventListener('orientationchange', () => setTimeout(board.fit, 300));
+window.addEventListener('beforeunload', () => { if (host.peer) { for (const c of host.conns.values()) { try { c.send({ type: 'bye' }); } catch (_) {} } } });
+
+// warm up the library in the background
+need('Peer', PEER_URLS).catch(() => {});
+
+const roomParam = new URLSearchParams(location.search).get('room');
+if (roomParam) startViewer(roomParam);
+
+window.__ipadCanvas = { caps, host, viewer, board, startViewer, useSource };
+})();
+</script>
+</body>
+</html>
